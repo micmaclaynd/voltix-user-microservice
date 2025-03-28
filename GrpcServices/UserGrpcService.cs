@@ -12,8 +12,8 @@ public class UserGrpcService(IUserService userService, SettingProto.SettingProto
     private readonly IUserService _userService = userService;
     private readonly SettingProto.SettingProtoClient _settingClient = settingClient;
 
-    public override async Task<Empty> ChangePassword(ChangePasswordRequest request, ServerCallContext context) {
-        var userModel = await _userService.GetUserAsync(request.UserId) ?? throw new RpcException(new Status(StatusCode.NotFound, "User not found"));
+    public override async Task<Empty> ChangeUserPassword(ChangeUserPasswordRequest request, ServerCallContext context) {
+        var userModel = await _userService.GetUserAsync(request.Id) ?? throw new RpcException(new Status(StatusCode.NotFound, "User not found"));
 
         userModel.PasswordHash = request.PasswordHash;
         await _userService.UpdateUserAsync(userModel);
@@ -24,7 +24,7 @@ public class UserGrpcService(IUserService userService, SettingProto.SettingProto
     public override async Task<CreateUserResponse> CreateUser(CreateUserRequest request, ServerCallContext context) {
         var userModel = await _userService.GetUserAsync(request.Email);
         if (userModel != null) {
-            throw new RpcException(new Status(StatusCode.NotFound, "The user with this email already exists"));
+            throw new RpcException(new Status(StatusCode.AlreadyExists, "The user with this email already exists"));
         }
 
         var defaultRoleIdResponse = await _settingClient.GetDefaultRoleIdAsync(new Empty());
@@ -42,7 +42,37 @@ public class UserGrpcService(IUserService userService, SettingProto.SettingProto
         await _userService.CreateUserAsync(userModel);
 
         return new CreateUserResponse {
-            UserId = userModel.Id
+            Id = userModel.Id
+        };
+    }
+
+    public override async Task<Empty> ConfirmUserEmail(ConfirmUserEmailRequest request, ServerCallContext context) {
+        var userModel = await _userService.GetUserAsync(request.Id) ?? throw new RpcException(new Status(StatusCode.NotFound, "User not found"));
+
+        userModel.IsEmailConfirmed = true;
+        await _userService.UpdateUserAsync(userModel);
+
+        return new Empty();
+    }
+
+    public override async Task<GetUserResponse> GetUserByEmail(GetUserByEmailRequest request, ServerCallContext context) {
+        var userModel = await _userService.GetUserAsync(request.Email) ?? throw new RpcException(new Status(StatusCode.NotFound, "User not found"));
+        return new GetUserResponse {
+            Id = userModel.Id,
+            Name = userModel.Name,
+            Surname = userModel.Surname,
+            Patronymic = userModel.Patronymic,
+            Email = userModel.Email,
+            PasswordHash = userModel.PasswordHash,
+            TelegramId = userModel.TelegramId,
+            TelegramUsername = userModel.TelegramUsername,
+            RoleId = userModel.RoleId,
+            Description = userModel.Description,
+            IsBanned = userModel.IsBanned,
+            IsEmailConfirmed = userModel.IsEmailConfirmed,
+            RegisteredDatetime = Timestamp.FromDateTime(
+                userModel.RegisteredDatetime.ToUniversalTime()
+            ),
         };
     }
 }
